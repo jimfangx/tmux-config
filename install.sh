@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Safe to run multiple times: the first run installs, later runs pull in
+# updates (this repo, TPM, plugins) and re-apply them.
+
 set -e
 set -u
 set -o pipefail
@@ -17,27 +20,52 @@ Install it first\n"
   exit 1
 fi
 
-if [ ! -e "$HOME/.tmux/plugins/tpm" ]; then
+# Pull latest tmux-config, then re-run the (possibly updated) install script once
+if [ -z "${TMUX_CONFIG_PULLED-}" ] && git -C "$REPODIR" rev-parse --is-inside-work-tree &>/dev/null; then
+  printf "Pull latest tmux-config\n"
+  if git -C "$REPODIR" pull --ff-only; then
+    export TMUX_CONFIG_PULLED=1
+    exec bash "$REPODIR/install.sh" "$@"
+  fi
+  printf "WARNING: Cannot pull updates (no upstream, no network or diverged local commits). \
+Installing current checkout\n"
+fi
+
+TPM_DIR="$HOME/.tmux/plugins/tpm"
+if [ ! -e "$TPM_DIR" ]; then
   printf "WARNING: Cannot found TPM (Tmux Plugin Manager) \
  at default location: \$HOME/.tmux/plugins/tpm.\n"
-  git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+  git clone https://github.com/tmux-plugins/tpm "$TPM_DIR"
+else
+  printf "Update TPM\n"
+  git -C "$TPM_DIR" pull --ff-only || printf "WARNING: Cannot update TPM\n"
 fi
 
-if [ -e "$HOME/.tmux.conf" ]; then
-  printf "Found existing .tmux.conf in your \$HOME directory. Will create a backup at $HOME/.tmux.conf.bak\n"
+# Back up existing .tmux.conf, unless it's already our symlink (i.e. re-run)
+if [ -e "$HOME/.tmux.conf" ] && [ "$(readlink "$HOME/.tmux.conf")" != ".tmux/tmux.conf" ]; then
+  backup="$HOME/.tmux.conf.bak"
+  if [ -e "$backup" ]; then
+    backup="$backup.$(date +%Y%m%d%H%M%S)"
+  fi
+  printf "Found existing .tmux.conf in your \$HOME directory. Will create a backup at $backup\n"
+  cp -f "$HOME/.tmux.conf" "$backup"
 fi
 
-cp -f "$HOME/.tmux.conf" "$HOME/.tmux.conf.bak" 2>/dev/null || true
+mkdir -p "$HOME"/.tmux
 cp -a ./tmux/. "$HOME"/.tmux/
 ln -sf .tmux/tmux.conf "$HOME"/.tmux.conf;
 
-# Install TPM plugins.
+# Install new, update existing and remove unused TPM plugins.
 # TPM requires running tmux server, as soon as `tmux start-server` does not work
-# create dump __noop session in detached mode, and kill it when plugins are installed
-printf "Install TPM plugins\n"
-tmux new -d -s __noop >/dev/null 2>&1 || true 
+# create dump __noop session in detached mode, and kill it when plugins are installed.
+# Then reload config, so already running tmux sessions pick up the updates
+printf "Install and update TPM plugins\n"
+tmux new -d -s __noop >/dev/null 2>&1 || true
 tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "~/.tmux/plugins"
-"$HOME"/.tmux/plugins/tpm/bin/install_plugins || true
+"$TPM_DIR"/bin/install_plugins || true
+"$TPM_DIR"/bin/update_plugins all || true
+"$TPM_DIR"/bin/clean_plugins || true
+tmux source-file "$HOME"/.tmux.conf || printf "WARNING: Cannot reload ~/.tmux.conf\n"
 tmux kill-session -t __noop >/dev/null 2>&1 || true
 
 printf "OK: Completed\n"

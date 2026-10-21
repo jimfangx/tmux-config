@@ -71,6 +71,8 @@ $ ./tmux-config/install.sh
 - [Tmux Plugin Manager](https://github.com/tmux-plugins/tpm) will be installed at default location `~/.tmux/plugins/tpm`, unless already presemt
 - required tmux plugins will be installed
 
+`install.sh` is safe to run again at any time to update: it pulls the latest version of this repo (`git pull --ff-only`), updates TPM and all plugins, removes plugins no longer listed, and reloads config in already running tmux sessions. Existing `~/.tmux.conf.bak` is never overwritten. Note, that files in `~/.tmux` are overwritten, so keep your customizations in this repo.
+
 Finally, you can jump into a new tmux session:
 
 ```
@@ -80,7 +82,7 @@ $ tmux new
 
 General settings
 ----------------
-Windows and pane indexing starts from `1` rather than `0`. Scrollback history limit is set to `20000`. Automatic window renameing is turned off. Aggresive resizing is on. Message line display timeout is `1.5s`. Mouse support in `on`.
+Windows and pane indexing starts from `1` rather than `0`. Scrollback history limit is set to `20000`. Automatic window renameing is turned off. Aggresive resizing is on. Message line display timeout is `1.5s`. Mouse support in `on`. Cursor is a thin blinking bar (`cursor-style`, tmux >= 3.3), apps like vim can still switch it to a block.
 
 256 color palette support is turned on, make sure that your parent terminal is configured propertly. See [here](https://unix.stackexchange.com/questions/1045/getting-256-colors-to-work-in-tmux) and [there](https://github.com/tmux/tmux/wiki/FAQ)
 
@@ -362,7 +364,16 @@ There is a root keybinding to enter Copy mode: `M-Up`. Once in copy mode, you ha
 
 Also, note, that when text is copied any trailing new lines are stripped. So, when you paste buffer in a command prompt, it will not be immediately executed.
 
-You can also select text using mouse. Default behavior is to copy text and immediately cancel copy mode on `MouseDragEnd` event. This is annoying, because sometimes I select text just to highlight it, but tmux drops me out of copy mode and reset scroll by the end. I've changed this behavior, so `MouseDragEnd` does not execute `copy-selection-and-cancel` action. Text is copied, but copy mode is not cancelled and selection is not cleared. You can then reset selection by mouse click.
+You can also select text using mouse, and it's tuned to feel like Ghostty or iTerm2 (requires tmux >= 3.3):
+
+- drag selects and copies on release, and you're right back in the shell. Selection ends before the character under the pointer, like in terminals.
+- double-click selects a word, triple-click selects a line. Text is copied immediately on the 2nd click (tmux default waits ~300ms to rule out a triple click), and you're right back in the shell.
+- when scrolled back with mouse wheel, drag/double-click/triple-click still copy, but keep the highlight and scroll position. Typing any key then jumps back to the bottom and the key goes to the shell. Scrolling down to the bottom or `Escape` also leaves copy mode.
+- keyboard copy mode (`M-Up`) keeps vi keys. `M-Up` while scrolled back with mouse switches to it.
+
+Under the hood, copy mode entered with the mouse switches the window to the `copy-mode` (emacs) key table, which is rebuilt for mouse use (see `tmux.conf` and `mouse_copy_keys.sh`), and back to vi keys when copy mode ends.
+- double-click word boundaries match Ghostty, so paths, URLs, `--flags`, emails and `foo-bar.txt` select as a single word (tmux default `word-separators` splits on every punctuation char).
+- a single click clears the highlight. If the pane is not scrolled back, it also leaves copy mode, so you're back at the live prompt.
 
 ![copy and scroll](https://user-images.githubusercontent.com/768858/33231146-e390afc8-d1f8-11e7-80ad-6977fc3a5df7.gif)
 
