@@ -71,7 +71,7 @@ $ ./tmux-config/install.sh
 - [Tmux Plugin Manager](https://github.com/tmux-plugins/tpm) will be installed at default location `~/.tmux/plugins/tpm`, unless already presemt
 - required tmux plugins will be installed
 
-`install.sh` is safe to run again at any time to update: it pulls the latest version of this repo (`git pull --ff-only`), updates TPM and all plugins, removes plugins no longer listed, and reloads config in already running tmux sessions. Existing `~/.tmux.conf.bak` is never overwritten. Note, that files in `~/.tmux` are overwritten, so keep your customizations in this repo.
+`install.sh` is safe to run again at any time to update: it pulls the latest version of this repo (`git pull --ff-only`), updates TPM and all plugins, removes plugins no longer listed, and refreshes already running tmux sessions: reloads config in every tmux server running this config (on any socket), and reattaches attached clients in place, as some settings (e.g. extended keys for `Shift+Enter`) only apply when a client attaches. iTerm2 `-CC` clients aren't reattached. Scrollback size of existing panes and key bindings removed from config are not refreshed, restart tmux server for those. Existing `~/.tmux.conf.bak` is never overwritten. Note, that files in `~/.tmux` are overwritten, so keep your customizations in this repo.
 
 Finally, you can jump into a new tmux session:
 
