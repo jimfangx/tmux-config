@@ -38,11 +38,11 @@ Features
 
 **Status line widgets**:
 
-- CPU, memory usage, system load average metrics
-- username and hostname, current date time
+- command running in each pane of the current window (e.g. `tail -f app.log`)
+- CPU, memory/swap usage (used out of total), current date time
+- username and hostname
 - battery information in status line
-- visual indicator when you press `prefix`
-- visual indicator when you're in `Copy` mode
+- status line accent color changes with the mode: `prefix`, `Copy` mode, synchronized panes, keys `OFF`
 - visual indicator when pane is zoomed
 - online/offline visual indicator
 - toggle visibility of status line
@@ -82,7 +82,7 @@ $ tmux new
 
 General settings
 ----------------
-Windows and pane indexing starts from `1` rather than `0`. Scrollback history limit is set to `20000`. Automatic window renameing is turned off. Aggresive resizing is on. Message line display timeout is `1.5s`. Mouse support in `on`. Cursor is a thin blinking bar (`cursor-style`, tmux >= 3.3), apps like vim can still switch it to a block.
+Windows and pane indexing starts from `1` rather than `0`. Scrollback history limit is set to `50000`. Automatic window renameing is turned off. Aggresive resizing is on. Message line display timeout is `1.5s`. Mouse support in `on`. Cursor is a thin blinking bar (`cursor-style`, tmux >= 3.3), apps like vim can still switch it to a block. `Shift+Enter` inserts a newline in Claude Code / Codex text boxes (extended keys; the outer terminal must support them, e.g. Ghostty, iTerm2, kitty, WezTerm).
 
 256 color palette support is turned on, make sure that your parent terminal is configured propertly. See [here](https://unix.stackexchange.com/questions/1045/getting-256-colors-to-work-in-tmux) and [there](https://github.com/tmux/tmux/wiki/FAQ)
 
@@ -303,17 +303,23 @@ Left part:
 Right part:
 ![status line right](https://user-images.githubusercontent.com/768858/33151608-6978de72-cfe1-11e7-829a-e303e31e8c16.png)
 
-The left part contains only current session name.
+The left part contains the session name, followed by the command running in each pane of the current window, as `<pane index>:<command line>`, the active pane highlighted. Handy to keep an eye on long running commands like `tail -f`. Command lines are refreshed every `status-interval` (5s).
+
+The session name, current window tab, active pane (and its border) are colored by the current mode, with the mode name next to the session name:
+- normal: orange
+- `PREFIX`: blue, after pressing the prefix key
+- `COPY`: yellow, in copy mode
+- `SYNC`: red, when panes are synchronized
+- `OFF`: gray, when key bindings are off, see "Nested sessions"
 
 Window tabs use Powerline arrows glyphs, so you need to install Powerline enabled font to make this work. See [Powerline docs](https://powerline.readthedocs.io/en/latest/installation.html#fonts-installation) for instructions and here is the [collection of patched fonts for powerline users](https://github.com/powerline/fonts)
 
 The right part of status line consists of following components:
 
-- CPU, memory usage, system load average metrics. Powered by [tmux-plugin-sysstat](https://github.com/samoshkin/tmux-plugin-sysstat) (dislaimed, that's my own development, because I haven't managed to find any good plugin with CPU and memory/swap metrics)
+- CPU, memory and swap usage, used out of total. Powered by [tmux-plugin-sysstat](https://github.com/samoshkin/tmux-plugin-sysstat) (dislaimed, that's my own development, because I haven't managed to find any good plugin with CPU and memory/swap metrics)
 - username and hostname (invaluable when you SSH onto remote host)
-- current date time
+- current date time (24h)
 - battery information
-- visual indicator when you press prefix key: `[^A]`.
 - visual indicator when pane is zoomed: `[Z]`
 - online/offline visual indicator (just pings `google.com`)
 
@@ -336,13 +342,13 @@ So, how it works. When in outer session, simply press `F12` to toggle off all ke
 
 ![nested sessions](https://user-images.githubusercontent.com/768858/33151636-84a0bab2-cfe1-11e7-9d5d-412525689c9b.gif)
 
-You might notice that when key bindings are "OFF", special `[OFF]` visual indicator is shown in the status line, and status line changes its style (colored to gray).
+You might notice that when key bindings are "OFF", special `OFF` visual indicator is shown next to the session name, and status line changes its style (colored to gray).
 
 ###  Local and remote sessions
 
 Remote session is detected by existence of `$SSH_CLIENT` variable. When session is remote, following changes are applied:
 - status line is docked to bottom; so it does not stack with status line of local session
-- some widgets are removed from status line: battery, date time. The idea is to economy width, so on wider screens you can open two remote tmux sessions in side-by-side panes of single window of local session.
+- battery widget is removed from status line. The idea is to economy width, so on wider screens you can open two remote tmux sessions in side-by-side panes of single window of local session.
 
 You can apply remote-specific settings by extending `~/.tmux/.tmux.remote.conf` file.
 
@@ -437,6 +443,9 @@ color_level_stress="$color_red"
 color_window_off_indicator="colour088"
 color_window_off_status_bg="colour238"
 color_window_off_status_current_bg="colour254"
+color_mode_prefix="$color_blue"
+color_mode_copy="$color_yellow"
+color_mode_sync="$color_red"
 ```
 
 Note, that variables are not extracted to dedicated file, as it should be, because for some reasons, tmux does not see variable values after sourcing `theme.conf` file. Don't know why.
