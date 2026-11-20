@@ -4,19 +4,25 @@
 # another one picked up via LD_LIBRARY_PATH (e.g. conda's), which crashes tmux 3.2a on
 # every copy, see tmux-wrapper.sh. Linux only, does nothing elsewhere.
 #
-# Usage: check_ncurses.sh [-S socket] [--notify]
-#   -S socket  server to check (default: the one from $TMUX, or the default one)
-#   --notify   also show the warning in tmux: now to attached clients, later on attach
+# Usage: check_ncurses.sh [-S socket] [--notify] [--safe-copy]
+#   -S socket    server to check (default: the one from $TMUX, or the default one)
+#   --notify     also show the warning in tmux: now to attached clients, later on attach
+#   --safe-copy  if foreign ncurses found, turn off tmux's own OSC 52 clipboard writes,
+#                which are what crashes (tparm() returns NULL), so copying can't kill the
+#                server. Copy still fills tmux buffers, and yank.sh backends still run.
+#                Nothing is changed when the server's ncurses is fine (e.g. Ubuntu, macOS)
 # Prints a warning and exits 1 when the server has a foreign ncurses loaded, else exits 0
 
 set -u
 
 tmux_cmd=(tmux)
 notify=0
+safe_copy=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -S) tmux_cmd+=(-S "$2"); shift 2 ;;
     --notify) notify=1; shift ;;
+    --safe-copy) safe_copy=1; shift ;;
     *) shift ;;
   esac
 done
@@ -46,9 +52,25 @@ expected=$(env -u LD_LIBRARY_PATH -u LD_PRELOAD ldd "/proc/$pid/exe" 2>/dev/null
 foreign=$(comm -23 <(printf "%s\n" "$loaded") <(printf "%s\n" "$expected") | paste -sd ' ' -)
 [ -n "$foreign" ] || exit 0
 
+if [ "$safe_copy" = 1 ]; then
+  # set-clipboard off: copy mode and apps' OSC 52 no longer reach tty_set_selection(),
+  # applies right away, also to attached clients. Ms@: no OSC 52 capability for clients
+  # attaching from now on, covers the rest (e.g. "set-buffer -w"). Must run after
+  # tmux.conf sets set-clipboard, or it's turned back on
+  "${tmux_cmd[@]}" set -s set-clipboard off
+  case "$("${tmux_cmd[@]}" show -sv terminal-overrides 2>/dev/null)" in
+    *'*:Ms@'*) ;;
+    *) "${tmux_cmd[@]}" set -as terminal-overrides ',*:Ms@' ;;
+  esac
+  effect="Clipboard (OSC 52) is turned off in this server to keep copy from crashing it."
+else
+  effect="Copying text can crash it."
+fi
+
 msg="tmux server (pid $pid) loaded $foreign instead of $(paste -sd ' ' - <<< "$expected"), \
-likely via LD_LIBRARY_PATH (e.g. conda). Copying text can crash it. \
-Restart it without LD_LIBRARY_PATH: tmux kill-server, then start tmux via ~/.local/bin/tmux"
+likely via LD_LIBRARY_PATH (e.g. conda). $effect \
+Restart it without LD_LIBRARY_PATH: tmux kill-server, then start tmux via ~/.local/bin/tmux \
+(run hash -r first if your shell still runs $(readlink -f "/proc/$pid/exe"))"
 printf "WARNING: %s\n" "$msg"
 
 if [ "$notify" = 1 ]; then

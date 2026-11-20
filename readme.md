@@ -82,12 +82,12 @@ $ tmux new
 
 ### tmux crashes on copy with conda (LD_LIBRARY_PATH)
 
-If your shell exports `LD_LIBRARY_PATH` pointing to a dir with another ncurses, e.g. `export LD_LIBRARY_PATH=$CONDA_PREFIX/lib`, system tmux loads that `libtinfo` instead of the one it was built against. tmux 3.2a (Rocky Linux 9) with conda's ncurses 6.5+ then segfaults on every copy (mouse drag, double click, `y`), and the server with all sessions is gone. Same crash upstream: [Arch FS#78584](https://bugs.archlinux.org/task/78584), [Fedora 2239333](https://bugzilla.redhat.com/show_bug.cgi?id=2239333). It's not the config, `set-clipboard off` crashes too.
+If your shell exports `LD_LIBRARY_PATH` pointing to a dir with another ncurses, e.g. `export LD_LIBRARY_PATH=$CONDA_PREFIX/lib`, system tmux loads that `libtinfo` instead of the one it was built against. tmux 3.2a (Rocky Linux 9) with conda's ncurses 6.5+ then segfaults on every copy (mouse drag, double click, `y`), and the server with all sessions is gone. Same crash upstream: [Arch FS#78584](https://bugs.archlinux.org/task/78584), [Fedora 2239333](https://bugzilla.redhat.com/show_bug.cgi?id=2239333). It crashes while tmux writes the copied text to the clipboard as OSC 52.
 
 Fix, set up by `install.sh` on Linux: the wrapper `~/.local/bin/tmux` ([tmux/tmux-wrapper.sh](tmux/tmux-wrapper.sh)) starts the real tmux without `LD_LIBRARY_PATH`, and tmux.conf puts it back into the environment of new panes, so conda works inside tmux as before. On systems without the problem (e.g. Ubuntu, no `LD_LIBRARY_PATH`) the wrapper changes nothing.
 - `~/.local/bin` must come before `/usr/bin` in `PATH` (default on Rocky Linux and Ubuntu, once `~/.local/bin` exists, for login shells), `install.sh` tells you if it doesn't. Or use `alias tmux=~/.local/bin/tmux`
 - a server already running with the wrong ncurses must be restarted once: `tmux kill-server` (ends all sessions), then start tmux again
-- when tmux runs with a foreign ncurses anyway (e.g. started bypassing the wrapper), a warning is shown in tmux on attach, and by `install.sh` ([tmux/check_ncurses.sh](tmux/check_ncurses.sh))
+- when tmux runs with a foreign ncurses anyway (e.g. started bypassing the wrapper, like from a shell that still has `/usr/bin/tmux` hashed, `hash -r` fixes that), the config detects it on start and on reload ([tmux/check_ncurses.sh](tmux/check_ncurses.sh)): it turns off tmux's own OSC 52 clipboard (`set-clipboard off`, `Ms@`) so copying can't crash the server, and shows a warning in tmux on attach, and in `install.sh`. Copied text still lands in tmux buffers (`prefix p`). Restart tmux via the wrapper to get the clipboard back. Servers with the right ncurses (Ubuntu, macOS, started via the wrapper) are left as they are
 - to stop using the wrapper: `rm ~/.local/bin/tmux`
 
 
