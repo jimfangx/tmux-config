@@ -73,6 +73,26 @@ mkdir -p "$HOME"/.tmux
 cp -a ./tmux/. "$HOME"/.tmux/
 ln -sf .tmux/tmux.conf "$HOME"/.tmux.conf;
 
+# Linux: link tmux wrapper as ~/.local/bin/tmux, it starts tmux without LD_LIBRARY_PATH,
+# so a conda (or other) ncurses there can't crash tmux on copy, see tmux/tmux-wrapper.sh.
+# An existing ~/.local/bin/tmux that isn't the wrapper (e.g. tmux built from source) is kept
+if [ "$(uname -s)" = "Linux" ]; then
+  wrapper="$HOME/.local/bin/tmux"
+  wrapper_target="$HOME/.tmux/tmux-wrapper.sh"
+  if { [ -e "$wrapper" ] || [ -L "$wrapper" ]; } && [ "$(readlink "$wrapper")" != "$wrapper_target" ]; then
+    printf "WARNING: $wrapper exists and is not the tmux-config wrapper, leaving it alone. \
+tmux started with LD_LIBRARY_PATH set (e.g. conda) can crash on copy, see tmux/tmux-wrapper.sh\n"
+  else
+    mkdir -p "$HOME/.local/bin"
+    ln -sfn "$wrapper_target" "$wrapper"
+    if ! [ "$(type -P tmux)" -ef "$wrapper" ]; then
+      printf "NOTE: Installed tmux wrapper at $wrapper, but \"tmux\" runs $(type -P tmux). \
+Put ~/.local/bin before $(dirname "$(type -P tmux)") in PATH (a new login shell may already do it), \
+or add to your shell rc: alias tmux=~/.local/bin/tmux\n"
+    fi
+  fi
+fi
+
 # Install new, update existing and remove unused TPM plugins.
 # TPM requires running tmux server, as soon as `tmux start-server` does not work
 # create dump __noop session in detached mode, and kill it when plugins are installed.
@@ -102,6 +122,7 @@ for socket in "$socket_dir"/*; do
     continue
   fi
   printf "  reloaded tmux server at $socket\n"
+  "$HOME"/.tmux/check_ncurses.sh -S "$socket" | sed 's/^/  /' || true
 
   tmux -S "$socket" list-clients -F '#{client_name} #{session_id} #{client_control_mode}' |
     while read -r client session control_mode; do

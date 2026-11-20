@@ -70,6 +70,7 @@ $ ./tmux-config/install.sh
 - symlink tmux config file at `~/.tmux.conf`, existing `~/.tmux.conf` will be backed up
 - [Tmux Plugin Manager](https://github.com/tmux-plugins/tpm) will be installed at default location `~/.tmux/plugins/tpm`, unless already presemt
 - required tmux plugins will be installed
+- on Linux, links a tmux wrapper at `~/.local/bin/tmux`, see [tmux crashes on copy with conda](#tmux-crashes-on-copy-with-conda-ld_library_path). An existing `~/.local/bin/tmux` of your own is left alone
 
 `install.sh` is safe to run again at any time to update: it pulls the latest version of this repo (`git pull --ff-only`), updates TPM and all plugins, removes plugins no longer listed, and refreshes already running tmux sessions: reloads config in every tmux server running this config (on any socket), and reattaches attached clients in place, as some settings (e.g. extended keys for `Shift+Enter`) only apply when a client attaches. iTerm2 `-CC` clients aren't reattached. Scrollback size of existing panes and key bindings removed from config are not refreshed, restart tmux server for those. Existing `~/.tmux.conf.bak` is never overwritten. Note, that files in `~/.tmux` are overwritten, so keep your customizations in this repo.
 
@@ -78,6 +79,16 @@ Finally, you can jump into a new tmux session:
 ```
 $ tmux new
 ```
+
+### tmux crashes on copy with conda (LD_LIBRARY_PATH)
+
+If your shell exports `LD_LIBRARY_PATH` pointing to a dir with another ncurses, e.g. `export LD_LIBRARY_PATH=$CONDA_PREFIX/lib`, system tmux loads that `libtinfo` instead of the one it was built against. tmux 3.2a (Rocky Linux 9) with conda's ncurses 6.5+ then segfaults on every copy (mouse drag, double click, `y`), and the server with all sessions is gone. Same crash upstream: [Arch FS#78584](https://bugs.archlinux.org/task/78584), [Fedora 2239333](https://bugzilla.redhat.com/show_bug.cgi?id=2239333). It's not the config, `set-clipboard off` crashes too.
+
+Fix, set up by `install.sh` on Linux: the wrapper `~/.local/bin/tmux` ([tmux/tmux-wrapper.sh](tmux/tmux-wrapper.sh)) starts the real tmux without `LD_LIBRARY_PATH`, and tmux.conf puts it back into the environment of new panes, so conda works inside tmux as before. On systems without the problem (e.g. Ubuntu, no `LD_LIBRARY_PATH`) the wrapper changes nothing.
+- `~/.local/bin` must come before `/usr/bin` in `PATH` (default on Rocky Linux and Ubuntu, once `~/.local/bin` exists, for login shells), `install.sh` tells you if it doesn't. Or use `alias tmux=~/.local/bin/tmux`
+- a server already running with the wrong ncurses must be restarted once: `tmux kill-server` (ends all sessions), then start tmux again
+- when tmux runs with a foreign ncurses anyway (e.g. started bypassing the wrapper), a warning is shown in tmux on attach, and by `install.sh` ([tmux/check_ncurses.sh](tmux/check_ncurses.sh))
+- to stop using the wrapper: `rm ~/.local/bin/tmux`
 
 
 General settings
