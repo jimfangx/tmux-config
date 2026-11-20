@@ -20,6 +20,24 @@ Install it first\n"
   exit 1
 fi
 
+# Config needs tmux >= 3.2 (terminal-features, extended-keys). With 3.2 a few
+# extras are skipped: cursor style, passthrough of escape sequences from apps
+# "tmux 3.2a" -> "3 2", "tmux next-3.5" -> "3 5". Unknown formats (e.g. OpenBSD) aren't checked
+tmux_version_at_least() {
+  tmux -V | awk -v want_major="$1" -v want_minor="$2" '
+    match($2, /[0-9]+\.[0-9]+/) {
+      split(substr($2, RSTART, RLENGTH), v, ".")
+      exit !(v[1] > want_major || (v[1] == want_major && v[2] >= want_minor))
+    }'
+}
+if ! tmux_version_at_least 3 2; then
+  printf "WARNING: $(tmux -V) is too old, this config needs tmux >= 3.2\n"
+  exit 1
+elif ! tmux_version_at_least 3 3; then
+  printf "NOTE: $(tmux -V), some features need tmux >= 3.3 and are turned off: \
+blinking bar cursor, passthrough of escape sequences from apps\n"
+fi
+
 # Pull latest tmux-config, then re-run the (possibly updated) install script once
 if [ -z "${TMUX_CONFIG_PULLED-}" ] && git -C "$REPODIR" rev-parse --is-inside-work-tree &>/dev/null; then
   printf "Pull latest tmux-config\n"
